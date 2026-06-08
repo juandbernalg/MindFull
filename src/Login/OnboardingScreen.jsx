@@ -16,10 +16,39 @@ export default function OnboardingScreen() {
 
   const sliderPosition = ((productivityLimit - 1) / 11) * 100;
 
-  const handleSubmit = (e) => {
+  const [statusMessage, setStatusMessage] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log({ name, birthDate, productivityLimit });
-    // Aquí iría la lógica para pasar al "Paso 2"
+    setStatusMessage('');
+    setIsSaving(true);
+
+    try {
+      const response = await fetch('http://localhost:3000/api/usuarios', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          nombre: name,
+          fecha_nacimiento: birthDate,
+          limite_horas_productividad: productivityLimit,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'No se pudo guardar el usuario');
+      }
+
+      setStatusMessage('Usuario guardado correctamente. ID: ' + data.id_usuario);
+      // Aquí puedes redirigir al siguiente paso o guardar el id en el estado global
+    } catch (error) {
+      setStatusMessage(error.message);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -64,6 +93,7 @@ export default function OnboardingScreen() {
                   placeholder="Tu nombre"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
+                  required
                 />
               </div>
 
@@ -75,6 +105,7 @@ export default function OnboardingScreen() {
                   id="birthdate"
                   value={birthDate}
                   onChange={(e) => setBirthDate(e.target.value)}
+                  required
                 />
               </div>
 
@@ -108,13 +139,17 @@ export default function OnboardingScreen() {
               </div>
 
               {/* Botones de acción */}
-              <button type="submit" className="btn-primary">
-                Continuar <span>→</span>
+              <button type="submit" className="btn-primary" disabled={isSaving}>
+                {isSaving ? 'Guardando...' : 'Continuar'} <span>→</span>
               </button>
 
               <button type="button" className="btn-link">
                 Omitir por ahora
               </button>
+
+              {statusMessage && (
+                <p className="status-message">{statusMessage}</p>
+              )}
             </form>
           </div>
         </section>

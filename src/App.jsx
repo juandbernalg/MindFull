@@ -6,6 +6,8 @@ export default function OnboardingScreen() {
   const [name, setName] = useState('');
   const [birthDate, setBirthDate] = useState('');
   const [showTareas, setShowTareas] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   // 1. Inicialización única de localStorage al montar el componente
   const [productivityLimit, setProductivityLimit] = useState(() => {
@@ -55,12 +57,41 @@ export default function OnboardingScreen() {
 
   
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     if (e && e.preventDefault) {
       e.preventDefault();
     }
-    console.log({ name, birthDate, productivityLimit });
-    setShowTareas(true);
+
+    setStatusMessage('');
+    setIsSaving(true);
+
+    try {
+      const response = await fetch('http://localhost:3000/api/usuarios', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          nombre: name,
+          fecha_nacimiento: birthDate,
+          limite_horas_productividad: productivityLimit,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'No se pudo guardar el usuario');
+      }
+
+      sessionStorage.setItem('mfa_userId', data.id_usuario);
+      sessionStorage.setItem('mfa_userName', name);
+      setStatusMessage('Usuario guardado correctamente. ID: ' + data.id_usuario);
+      setShowTareas(true);
+    } catch (error) {
+      setStatusMessage(error.message);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (showTareas) {
@@ -155,13 +186,17 @@ export default function OnboardingScreen() {
               </div>
 
               {/* Botones de acción */}
-              <button type="submit" className="btn-primary">
-                Continuar <span>→</span>
+              <button type="submit" className="btn-primary" disabled={isSaving}>
+                {isSaving ? 'Guardando...' : 'Continuar'} <span>→</span>
               </button>
 
               <button type="button" className="btn-link">
                 Omitir por ahora
               </button>
+
+              {statusMessage && (
+                <p className="status-message">{statusMessage}</p>
+              )}
             </form>
           </div>
         </section>

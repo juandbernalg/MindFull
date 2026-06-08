@@ -8,40 +8,118 @@ export default function MindFull() {
   const defaultTasks = [
     {icon:'green', title:'Revisar documentación del sistema de diseño', time:'30m', tag:'Estudio'},
     {icon:'pink', title:'Práctica de mindfulness nocturna', time:'15m', tag:'Personal'},
-    {icon:'teal', title:'Enviar proyecto final del módulo de React', time:'120m', tag:'! Urgente', urgent:true},
+    {icon:'teal', title:'Enviar proyecto final del módulo de React', time:'120m', tag:'Trabajo', urgent:true},
   ];
 
-  const [tasks, setTasks] = useState(() => {
-    try {
-      const raw = localStorage.getItem('tareas');
-      return raw ? JSON.parse(raw) : defaultTasks;
-    } catch (e) {
-      return defaultTasks;
-    }
-  });
-
+  const [tasks, setTasks] = useState([]);
+  const [userId, setUserId] = useState(() => sessionStorage.getItem('mfa_userId'));
   const [newTitle, setNewTitle] = useState('');
   const [newTime, setNewTime] = useState('30m');
   const [newTag, setNewTag] = useState('Personal');
+  const [statusMessage, setStatusMessage] = useState('');
 
   useEffect(() => {
-    try { localStorage.setItem('tareas', JSON.stringify(tasks)); } catch (e) {}
-  }, [tasks]);
+    localStorage.removeItem('tareas');
 
-  const addTask = (e) => {
+    const handleUnload = () => {
+      sessionStorage.removeItem('mfa_userId');
+      sessionStorage.removeItem('mfa_userName');
+    };
+
+    window.addEventListener('beforeunload', handleUnload);
+    return () => window.removeEventListener('beforeunload', handleUnload);
+  }, []);
+
+  useEffect(() => {
+    if (!userId) {
+      setTasks([]);
+      return;
+    }
+
+    const fetchTasks = async () => {
+      try {
+        const response = await fetch(`http://localhost:3000/api/tareas?id_usuario=${userId}`);
+        if (!response.ok) {
+          throw new Error('No se pudieron cargar las tareas');
+        }
+        const data = await response.json();
+        setTasks(data.length ? data.map((task) => ({
+          id: task.id_tarea,
+          icon: task.es_urgente ? 'red' : 'blue',
+          title: task.titulo,
+          time: `${task['duración_minutos'] ?? 30}m`,
+          tag: task.categoria || 'Personal',
+          urgent: task.es_urgente === 1,
+        })) : []);
+      } catch (error) {
+        setStatusMessage(error.message);
+        setTasks([]);
+      }
+    };
+
+    fetchTasks();
+  }, [userId]);
+
+  const normalizeCategory = (tag) => {
+    const normalized = tag.trim().toLowerCase();
+    if (normalized.includes('trabajo')) return 'Trabajo';
+    if (normalized.includes('personal')) return 'Personal';
+    if (normalized.includes('estudio')) return 'Estudio';
+    if (normalized.includes('equipo')) return 'Equipo';
+    return 'Personal';
+  };
+
+  const parseTime = (value) => {
+    const parsed = parseInt(value.replace(/[^0-9]/g, ''), 10);
+    return Number.isNaN(parsed) ? 30 : parsed;
+  };
+
+  const addTask = async (e) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
-    const t = {
-      id: Date.now(),
-      icon: 'blue',
-      title: newTitle.trim(),
-      time: newTime,
-      tag: newTag,
+
+    const durationValue = parseTime(newTime);
+    const categoryValue = normalizeCategory(newTag);
+    const taskToSave = {
+      id_usuario: userId,
+      titulo: newTitle.trim(),
+      duracion_minutos: durationValue,
+      categoria: categoryValue,
+      orden_prioridad: tasks.length + 1,
+      es_urgente: categoryValue === 'Trabajo' || newTag.toLowerCase().includes('urgente'),
+      estado: 'pendiente',
     };
-    setTasks(prev => [...prev, t]);
-    setNewTitle('');
-    setNewTime('30m');
-    setNewTag('Personal');
+
+    try {
+      const response = await fetch('http://localhost:3000/api/tareas', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(taskToSave),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'No se pudo guardar la tarea');
+      }
+
+      const newTask = {
+        id: data.id_tarea,
+        icon: taskToSave.es_urgente ? 'red' : 'blue',
+        title: taskToSave.titulo,
+        time: `${durationValue}m`,
+        tag: categoryValue,
+        urgent: taskToSave.es_urgente,
+      };
+      setTasks((prev) => [...prev, newTask]);
+      setNewTitle('');
+      setNewTime('30m');
+      setNewTag('Personal');
+      setStatusMessage('Tarea guardada en la base de datos');
+    } catch (error) {
+      setStatusMessage(error.message);
+    }
   };
 
   const renderSection = () => {

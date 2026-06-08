@@ -1,0 +1,158 @@
+/* Contenedor oscuro translúcido con desenfoque de fondo */
+.panic-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(225, 232, 238, 0.7); /* Tono azul grisáceo suave */
+  backdrop-filter: blur(8px); /* Aplica el efecto de la foto */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999; /* Por encima de todo */
+  animation: fadeIn 0.25s ease-out;
+}
+
+/* Tarjeta Blanca Central */
+.panic-modal-card {
+  background: #ffffff;
+  width: 100%;
+  max-width: 540px;
+  padding: 40px 30px;
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+  text-align: center;
+  box-sizing: border-box;
+}
+
+/* Icono de Alerta Superior Redondo */
+.panic-alert-icon-container {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.panic-alert-icon {
+  background-color: #fee2e2; /* Rojo claro */
+  color: #ef4444; /* Rojo alerta */
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Textos */
+.panic-modal-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 10px 0;
+}
+
+.panic-modal-subtitle {
+  font-size: 14px;
+  color: #64748b;
+  line-height: 1.5;
+  margin: 0 0 30px 0;
+}
+
+/* Grid de Opciones */
+.panic-options-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 35px;
+}
+
+/* Botones / Tarjetas de Opción */
+.panic-option-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.panic-option-card span {
+  font-size: 12px;
+  font-weight: 500;
+  color: #475569;
+}
+
+.panic-option-card .option-icon-wrapper {
+  color: #0d9488; /* Verde azulado del concepto original */
+}
+
+/* Hover de las opciones */
+.panic-option-card:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+/* Estado de Opción Seleccionada */
+.panic-option-card.selected {
+  background: #eff6ff;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 1px #3b82f6;
+}
+.panic-option-card.selected .option-icon-wrapper,
+.panic-option-card.selected span {
+  color: #1d4ed8;
+}
+
+/* Contenedor de botones finales */
+.panic-actions-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Botón Confirmar (Color idéntico a la imagen) */
+.panic-btn-confirm {
+  background-color: #ff6565;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 14px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  width: 100%;
+}
+
+.panic-btn-confirm:hover {
+  background-color: #e85454;
+}
+
+/* Botón Cancelar */
+.panic-btn-cancel {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 5px;
+  transition: color 0.2s ease;
+  width: max-content;
+  margin: 0 auto;
+}
+
+.panic-btn-cancel:hover {
+  color: #64748b;
+}
+
+/* Animación de entrada suave */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

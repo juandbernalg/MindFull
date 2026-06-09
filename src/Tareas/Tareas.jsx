@@ -6,11 +6,7 @@ import MindFullDashboard from '../Panel de Salud/panelsalud.jsx';
 export default function MindFull({ abrirPanico }) {
   const [activeSection, setActiveSection] = useState('Tareas');
 
-  const defaultTasks = [
-    {icon:'green', title:'Revisar documentación del sistema de diseño', time:'30m', tag:'Estudio'},
-    {icon:'pink', title:'Práctica de mindfulness nocturna', time:'15m', tag:'Personal'},
-    {icon:'teal', title:'Enviar proyecto final del módulo de React', time:'120m', tag:'Trabajo', urgent:true},
-  ];
+  
 
   const [tasks, setTasks] = useState([]);
   const [userId, setUserId] = useState(() => sessionStorage.getItem('mfa_userId'));
@@ -18,6 +14,9 @@ export default function MindFull({ abrirPanico }) {
   const [newTime, setNewTime] = useState('30m');
   const [newTag, setNewTag] = useState('Personal');
   const [statusMessage, setStatusMessage] = useState('');
+  const [comparePair, setComparePair] = useState(null);
+  const [compareResult, setCompareResult] = useState(null);
+  const [selectedChoice, setSelectedChoice] = useState(null);
 
   useEffect(() => {
     localStorage.removeItem('tareas');
@@ -51,6 +50,7 @@ export default function MindFull({ abrirPanico }) {
           time: `${task['duración_minutos'] ?? 30}m`,
           tag: task.categoria || 'Personal',
           urgent: task.es_urgente === 1,
+          completed: false,
         })) : []);
       } catch (error) {
         setStatusMessage(error.message);
@@ -60,6 +60,20 @@ export default function MindFull({ abrirPanico }) {
 
     fetchTasks();
   }, [userId]);
+
+  // Generar comparación automáticamente cuando haya al menos 2 tareas
+  useEffect(() => {
+    // Si no hay comparación y hay 2+ tareas, generar una nueva
+    if (tasks.length >= 2 && !comparePair) {
+      generateComparison();
+    }
+    // Si la comparación actual tiene tareas que ya no existen, regenerar
+    if (comparePair && tasks.length >= 2 && 
+        (!tasks.some(t => t.id === comparePair[0].id) || !tasks.some(t => t.id === comparePair[1].id))) {
+      generateComparison();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks]);
 
   const normalizeCategory = (tag) => {
     const normalized = tag.trim().toLowerCase();
@@ -77,7 +91,17 @@ export default function MindFull({ abrirPanico }) {
 
   const addTask = async (e) => {
     e.preventDefault();
-    if (!newTitle.trim()) return;
+    
+    // Verificar que tenemos userId
+    if (!userId) {
+      setStatusMessage('Error: No hay usuario activo. Por favor, inicia sesión nuevamente.');
+      return;
+    }
+    
+    if (!newTitle.trim()) {
+      setStatusMessage('Por favor, describe la tarea');
+      return;
+    }
 
     const durationValue = parseTime(newTime);
     const categoryValue = normalizeCategory(newTag);
@@ -105,6 +129,11 @@ export default function MindFull({ abrirPanico }) {
         throw new Error(data.error || 'No se pudo guardar la tarea');
       }
 
+      // Validar que tenemos un ID válido
+      if (!data.id_tarea) {
+        throw new Error('El servidor no devolvió un ID de tarea válido');
+      }
+
       const newTask = {
         id: data.id_tarea,
         icon: taskToSave.es_urgente ? 'red' : 'blue',
@@ -113,13 +142,92 @@ export default function MindFull({ abrirPanico }) {
         tag: categoryValue,
         urgent: taskToSave.es_urgente,
       };
+      
       setTasks((prev) => [...prev, newTask]);
       setNewTitle('');
       setNewTime('30m');
       setNewTag('Personal');
-      setStatusMessage('Tarea guardada en la base de datos');
+      setStatusMessage('✓ Tarea añadida exitosamente');
     } catch (error) {
-      setStatusMessage(error.message);
+      console.error('Error al añadir tarea:', error);
+      setStatusMessage(`Error: ${error.message}`);
+    }
+  };
+
+  const completeTask = async (taskId) => {
+    try {
+      const res = await fetch(`http://localhost:3000/api/tareas/${taskId}/complete`, {
+        method: 'POST',
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'No se pudo completar la tarea');
+      
+      const taskIdNum = parseInt(taskId, 10);
+      
+      // Filtrar inmediatamente la tarea completada
+      setTasks((prev) => prev.filter((t) => t.id !== taskIdNum));
+      
+      // Si la tarea completada estaba en la comparación, limpiar comparación
+      if (comparePair && (comparePair[0].id === taskIdNum || comparePair[1].id === taskIdNum)) {
+        setComparePair(null);
+        setCompareResult(null);
+        setSelectedChoice(null);
+      }
+      
+      setStatusMessage('¡Tarea completada!');
+    } catch (err) {
+      setStatusMessage(err.message);
+    }
+  };
+
+  const selectCompareChoice = (taskTitle) => {
+    setSelectedChoice(taskTitle);
+    setStatusMessage(`Elegiste la tarea: ${taskTitle}`);
+  };
+
+  const generateComparison = async () => {
+    setSelectedChoice(null);
+    if (tasks.length < 2) {
+      setStatusMessage('Se requieren al menos 2 tareas para comparar');
+      return;
+    }
+
+    let idxA = Math.floor(Math.random() * tasks.length);
+    let idxB = idxA;
+    while (idxB === idxA && tasks.length > 1) {
+      idxB = Math.floor(Math.random() * tasks.length);
+    }
+
+    const a = tasks[idxA];
+    const b = tasks[idxB];
+    setComparePair([a, b]);
+    setCompareResult(null);
+
+    const payloadA = {
+      titulo: a.title,
+      duracion_minutos: parseTime(a.time),
+      categoria: a.tag,
+      es_urgente: a.urgent ? 1 : 0,
+    };
+    const payloadB = {
+      titulo: b.title,
+      duracion_minutos: parseTime(b.time),
+      categoria: b.tag,
+      es_urgente: b.urgent ? 1 : 0,
+    };
+
+    try {
+      const res = await fetch('http://localhost:3000/api/compare-tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ a: payloadA, b: payloadB }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Error en comparación IA');
+      setCompareResult(json);
+      setStatusMessage('Comparación completada');
+    } catch (err) {
+      setStatusMessage(err.message);
     }
   };
 
@@ -239,33 +347,50 @@ export default function MindFull({ abrirPanico }) {
                 <h1>Prioridades Diarias</h1>
                 <p>Organiza tu mente, una elección a la vez.</p>
               </div>
-              <div className="tareas-pill">{tasks.length} Tareas Pendientes</div>
-            </div>
-
-            <section className="motor">
-              <div className="motor-label">MOTOR DE DECISIONES</div>
-              <h2>¿Qué contribuye más a tu paz?</h2>
+              <div className="tareas-pill">{tasks.filter((task) => !task.completed).length} Tareas Pendientes</div>
+              {selectedChoice && (
+                <div className="compare-message">✓ Seleccionaste: {selectedChoice}</div>
+              )}
               <div className="vs-grid">
-                <div className="task-card" onClick={() => alert('Elegiste TRABAJO')}>
-                  <span className="tag trabajo">TRABAJO</span>
-                  <h3>Finalizar Estrategia de Presupuesto Q3</h3>
-                  <div className="task-meta">
-                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    45 mins
+                {comparePair ? (
+                  <>
+                    <div className={`task-card ${compareResult && compareResult.winner === 'A' ? 'winner' : ''} ${selectedChoice === comparePair[0].title ? 'selected' : ''}`} onClick={() => selectCompareChoice(comparePair[0].title)}>
+                      <span className={`tag ${comparePair[0].tag?.toLowerCase() || 'personal'}`}>{comparePair[0].tag?.toUpperCase() || 'PERSONAL'}</span>
+                      <h3>{comparePair[0].title}</h3>
+                      <div className="task-meta">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        {comparePair[0].time}
+                      </div>
+                    </div>
+                    <div className="vs-circle">vs</div>
+                    <div className={`task-card ${compareResult && compareResult.winner === 'B' ? 'winner' : ''} ${selectedChoice === comparePair[1].title ? 'selected' : ''}`} onClick={() => selectCompareChoice(comparePair[1].title)}>
+                      <span className={`tag ${comparePair[1].tag?.toLowerCase() || 'personal'}`}>{comparePair[1].tag?.toUpperCase() || 'PERSONAL'}</span>
+                      <h3>{comparePair[1].title}</h3>
+                      <div className="task-meta">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        {comparePair[1].time}
+                      </div>
+                    </div>
+                    <div className="compare-actions">
+                      <button onClick={() => generateComparison()}>Comparar de nuevo</button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="vs-placeholder">
+                    <p>No hay comparación activa.</p>
+                    <button onClick={() => generateComparison()}>Generar comparación IA</button>
                   </div>
-                </div>
-                <div className="vs-circle">vs</div>
-                <div className="task-card" onClick={() => alert('Elegiste PERSONAL')}>
-                  <span className="tag personal">PERSONAL</span>
-                  <h3>Compra y Preparación de Comidas</h3>
-                  <div className="task-meta">
-                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    90 mins
-                  </div>
-                </div>
+                )}
               </div>
+              {compareResult && (
+                <div className="compare-result">
+                  <p>Ganador: {compareResult.winner}</p>
+                  <p>Probabilidad A {'>'} B: {(compareResult.prob_A_more_important * 100).toFixed(1)}%</p>
+                  <p>Modelo: {compareResult.using_tf ? 'TensorFlow' : 'scikit-learn'}</p>
+                </div>
+              )}
               <p className="motor-foot">Reconoce tu capacidad. Elige la tarea que se alinee con tu nivel actual de energía.</p>
-            </section>
+            </div>
 
             <div className="content-grid">
               <div>
@@ -287,6 +412,9 @@ export default function MindFull({ abrirPanico }) {
                         <span>◷ {t.time}</span>
                         <span className={t.urgent ? 'urgente' : ''}>{t.tag}</span>
                       </div>
+                    </div>
+                    <div className="inbox-actions">
+                      <button className="btn-complete" onClick={() => completeTask(t.id)}>✔ Marcar</button>
                     </div>
                   </div>
                 ))}
@@ -314,12 +442,15 @@ export default function MindFull({ abrirPanico }) {
 
                   <label className="field small">
                     <span className="field-label">Etiqueta</span>
-                    <input
-                      type="text"
+                    <select
                       value={newTag}
                       onChange={(e) => setNewTag(e.target.value)}
                       aria-label="etiqueta"
-                    />
+                    >
+                      <option value="Trabajo">Trabajo</option>
+                      <option value="Estudio">Estudio</option>
+                      <option value="Personal">Personal</option>
+                    </select>
                   </label>
 
                   <button type="submit">Añadir</button>
